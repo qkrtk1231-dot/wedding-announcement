@@ -1,12 +1,310 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>사진 관리자 · 우리의 다섯 번째 겨울</title><style>body{margin:0;background:#eee9e1;color:#40382e;font-family:system-ui,sans-serif}main{max-width:640px;margin:30px auto;padding:24px;background:#fffaf4;border-radius:18px}h1{font-size:23px}input,button{font:inherit;padding:12px;border-radius:8px;border:1px solid #d1c5b5}input[type=password]{width:65%}button{background:#665849;color:white;cursor:pointer}button:disabled{opacity:.5}.photo{display:flex;align-items:center;gap:8px;border-bottom:1px solid #ddd;padding:8px 0}.photo img{width:65px;height:75px;object-fit:cover}.photo span{flex:1;word-break:break-all}.photo button{padding:8px}.notice{color:#815a47;font-size:13px;line-height:1.7}#panel{display:none}</style></head><body><main><h1>우리의 다섯 번째 겨울 · 사진 관리자</h1><p class="notice">이 페이지는 관리자 전용입니다. 비밀번호는 서버에서 확인합니다.</p><div id="login"><input type="password" id="password" placeholder="관리자 비밀번호"><button id="enter">로그인</button></div><div id="panel"><h2>사진 순서 및 관리</h2><p class="notice">▲ ▼ 버튼으로 순서를 변경하세요. 마지막에 반드시 '순서 저장'을 누르세요. 사진 추가/삭제는 GitHub 반영까지 잠시 걸릴 수 있습니다.</p><div id="items"></div><button id="save">순서 저장</button><h2>사진 추가</h2><input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple><button id="upload">선택한 사진 추가</button><h2>축하 댓글 관리</h2><div id="comments"></div></div><p id="status" class="notice"></p><p><a href="./">청첩장으로 돌아가기</a></p></main><script type="module">
-import {API_BASE} from './config.js';let token='',photos=[];const $=s=>document.querySelector(s),status=t=>$('#status').textContent=t;
-async function api(path,method='GET',body){if(!API_BASE)throw Error('config.js에 API 주소를 설정해 주세요.');const r=await fetch(API_BASE+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(body?{body:JSON.stringify(body)}:{})});const j=await r.json();if(!r.ok)throw Error(j.error||'요청 실패');return j}
-$('#enter').onclick=async()=>{try{const r=await api('/login','POST',{password:$('#password').value});token=r.token;$('#password').value='';$('#login').style.display='none';$('#panel').style.display='block';await refresh();status('로그인 성공')}catch(e){status(e.message)}};
-async function refresh(){photos=(await api('/gallery')).photos||[];render();await comments()}
-function render(){const root=$('#items');root.replaceChildren();photos.forEach((f,i)=>{const row=document.createElement('div');row.className='photo';const im=document.createElement('img');im.src=f.startsWith('https://')?f:'photos/'+encodeURIComponent(f);const name=document.createElement('span');name.textContent=f;row.append(im,name);for(const [label,fn] of [['▲',()=>move(i,-1)],['▼',()=>move(i,1)],['삭제',()=>remove(i)]]){const b=document.createElement('button');b.textContent=label;b.onclick=fn;row.append(b)}root.append(row)})}
-function move(i,step){const j=i+step;if(j<0||j>=photos.length)return;[photos[i],photos[j]]=[photos[j],photos[i]];render()}
-async function remove(i){const name=photos[i];if(!confirm('사진을 삭제할까요?'))return;try{if(!name.startsWith('https://'))await api('/admin/delete','POST',{name});photos.splice(i,1);await api('/admin/gallery','PUT',{photos});render();status('삭제 완료')}catch(e){status(e.message)}}
-$('#save').onclick=async()=>{try{await api('/admin/gallery','PUT',{photos});status('사진 순서 저장 완료. 방문자 화면은 새로고침하면 반영됩니다.')}catch(e){status(e.message)}};
-$('#upload').onclick=async()=>{const files=[...$('#files').files];if(!files.length)return status('사진을 선택하세요.');for(const file of files){if(file.size>5*1024*1024){status(file.name+'은 5MB 초과입니다.');continue}try{status(file.name+' 업로드 중...');const base64=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=reject;r.readAsDataURL(file)});const name=Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+(file.name.split('.').pop().toLowerCase()==='jpeg'?'jpg':file.name.split('.').pop().toLowerCase());await api('/admin/upload','POST',{name,base64});photos.push(name);await api('/admin/gallery','PUT',{photos});render()}catch(e){status(e.message);return}}status('사진 업로드 완료');$('#files').value=''};
-async function comments(){const root=$('#comments');root.replaceChildren();const entries=await api('/comments');for(const c of entries){const div=document.createElement('div');div.className='photo';const t=document.createElement('span');t.textContent=c.name+': '+c.message;const b=document.createElement('button');b.textContent='삭제';b.onclick=async()=>{if(!confirm('댓글을 삭제할까요?'))return;await api('/admin/comments','DELETE',{id:c.id});await comments()};div.append(t,b);root.append(div)}}
-</script></body></html>
+
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>사진 관리자 · 우리의 다섯 번째 겨울</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eee9e1;color:#40382e;font-family:system-ui,sans-serif}
+main{max-width:640px;margin:30px auto;padding:24px;background:#fffaf4;border-radius:18px}
+h1{font-size:23px}
+h2{font-size:19px;margin-top:35px}
+input,button{font:inherit;padding:12px;border-radius:8px;border:1px solid #d1c5b5}
+input[type=password]{width:65%}
+input[type=file]{max-width:100%;font-size:13px}
+button{background:#665849;color:white;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}
+.photo{display:flex;align-items:center;gap:8px;border-bottom:1px solid #ddd;padding:10px 0}
+.photo img{width:65px;height:75px;object-fit:cover}
+.photo span{flex:1;word-break:break-all;font-size:13px}
+.photo button{padding:8px}
+.notice{color:#815a47;font-size:13px;line-height:1.7}
+#panel{display:none}
+#status{white-space:pre-wrap}
+a{color:#665849}
+</style>
+</head>
+<body>
+<main>
+<h1>우리의 다섯 번째 겨울 · 사진 관리자</h1>
+<p class="notice">관리자 전용 페이지입니다.</p>
+
+<div id="login">
+<input type="password" id="password" placeholder="관리자 비밀번호">
+<button id="enter">로그인</button>
+</div>
+
+<div id="panel">
+<h2>사진 순서 및 관리</h2>
+<p class="notice">
+▲ ▼ 버튼으로 순서를 변경한 후 반드시 순서 저장을 눌러주세요.
+</p>
+<div id="items"></div>
+<button id="save">순서 저장</button>
+
+<h2>사진 추가</h2>
+<p class="notice">
+큰 사진도 자동으로 압축해서 업로드합니다.<br>
+여러 장을 한 번에 선택할 수 있습니다.<br>
+원본 사진은 변경되지 않습니다.
+</p>
+<input id="files" type="file"
+accept="image/jpeg,image/png,image/webp" multiple>
+<button id="upload" type="button">선택한 사진 추가</button>
+
+<h2>축하 댓글 관리</h2>
+<div id="comments"></div>
+</div>
+
+<p id="status" class="notice"></p>
+<p><a href="./">청첩장으로 돌아가기</a></p>
+</main>
+
+<script type="module">
+import {API_BASE} from './config.js';
+
+let token = '';
+let photos = [];
+
+const $ = s => document.querySelector(s);
+const status = t => $('#status').textContent = t;
+
+async function api(path, method='GET', body) {
+  if (!API_BASE) throw Error('API 주소가 설정되지 않았습니다.');
+
+  const r = await fetch(API_BASE + path, {
+    method,
+    headers: {
+      'Content-Type':'application/json',
+      ...(token ? {Authorization:'Bearer '+token} : {})
+    },
+    ...(body !== undefined ? {body:JSON.stringify(body)} : {})
+  });
+
+  const j = await r.json();
+  if (!r.ok) throw Error(j.error || '요청 실패');
+  return j;
+}
+
+$('#enter').onclick = async () => {
+  try {
+    const r = await api('/login','POST',{
+      password:$('#password').value
+    });
+    token = r.token;
+    $('#password').value = '';
+    $('#login').style.display = 'none';
+    $('#panel').style.display = 'block';
+    await refresh();
+    status('로그인 성공');
+  } catch(e) {
+    status(e.message);
+  }
+};
+
+async function refresh() {
+  photos = (await api('/gallery')).photos || [];
+  render();
+  await comments();
+}
+
+function render() {
+  const root = $('#items');
+  root.replaceChildren();
+
+  photos.forEach((f,i) => {
+    const row = document.createElement('div');
+    row.className = 'photo';
+
+    const im = document.createElement('img');
+    im.src = f.startsWith('https://')
+      ? f : 'photos/' + encodeURIComponent(f);
+
+    const name = document.createElement('span');
+    name.textContent = f;
+    row.append(im,name);
+
+    for (const [label,fn] of [
+      ['▲',()=>move(i,-1)],
+      ['▼',()=>move(i,1)],
+      ['삭제',()=>remove(i)]
+    ]) {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.onclick = fn;
+      row.append(b);
+    }
+    root.append(row);
+  });
+}
+
+function move(i,step) {
+  const j = i + step;
+  if(j < 0 || j >= photos.length) return;
+  [photos[i],photos[j]] = [photos[j],photos[i]];
+  render();
+}
+
+async function remove(i) {
+  const name = photos[i];
+  if(!confirm('사진을 삭제할까요?')) return;
+
+  try {
+    if(!name.startsWith('https://')) {
+      await api('/admin/delete','POST',{name});
+    }
+    photos.splice(i,1);
+    await api('/admin/gallery','PUT',{photos});
+    render();
+    status('삭제 완료');
+  } catch(e) {
+    status('삭제 실패: ' + e.message);
+  }
+}
+
+$('#save').onclick = async () => {
+  try {
+    await api('/admin/gallery','PUT',{photos});
+    status('사진 순서 저장 완료');
+  } catch(e) {
+    status(e.message);
+  }
+};
+
+// 사진 자동 압축
+async function compressPhoto(file) {
+  const bitmap = await createImageBitmap(file);
+
+  try {
+    const scale = Math.min(
+      1, 1800 / Math.max(bitmap.width,bitmap.height)
+    );
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1,Math.round(bitmap.width*scale));
+    canvas.height = Math.max(1,Math.round(bitmap.height*scale));
+
+    const ctx = canvas.getContext('2d');
+    if(!ctx) throw Error('이미지 처리 실패');
+
+    // PNG 투명 배경을 흰색으로 변환
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+
+    const blob = await new Promise(resolve =>
+      canvas.toBlob(resolve,'image/jpeg',0.8)
+    );
+
+    if(!blob) throw Error('사진 압축 실패');
+
+    if(blob.size > 5*1024*1024) {
+      throw Error('압축 후에도 사진 용량이 너무 큽니다.');
+    }
+
+    return await new Promise((resolve,reject) => {
+      const reader = new FileReader();
+      reader.onload = () =>
+        resolve(String(reader.result).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } finally {
+    bitmap.close();
+  }
+}
+
+// 사진 업로드
+$('#upload').onclick = async () => {
+  const files = [...$('#files').files];
+
+  if(!files.length) {
+    return status('사진을 선택하세요.');
+  }
+
+  const btn = $('#upload');
+  btn.disabled = true;
+  let completed = 0;
+
+  try {
+    for(const file of files) {
+      if(!['image/jpeg','image/png','image/webp'].includes(file.type)) {
+        throw Error(file.name+'은 지원하지 않는 파일입니다.');
+      }
+
+      status(
+        `${completed+1}/${files.length}장\n`+
+        `${file.name} 자동 압축 중...`
+      );
+
+      const base64 = await compressPhoto(file);
+
+      const name =
+        Date.now()+'-'+
+        Math.random().toString(36).slice(2,8)+'.jpg';
+
+      status(
+        `${completed+1}/${files.length}장\n`+
+        `${file.name} 업로드 중...`
+      );
+
+      await api('/admin/upload','POST',{name,base64});
+
+      photos.push(name);
+      await api('/admin/gallery','PUT',{photos});
+      render();
+
+      completed++;
+      status(`${completed}/${files.length}장 업로드 완료`);
+    }
+
+    $('#files').value = '';
+    status(`사진 ${completed}장 업로드 완료!`);
+  } catch(e) {
+    status(
+      `업로드 실패: ${e.message}\n`+
+      `성공한 사진: ${completed}장`
+    );
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// 댓글 관리
+async function comments() {
+  const root = $('#comments');
+  root.replaceChildren();
+
+  const entries = await api('/comments');
+
+  for(const c of entries) {
+    const div = document.createElement('div');
+    div.className = 'photo';
+
+    const t = document.createElement('span');
+    t.textContent = c.name+': '+c.message;
+
+    const b = document.createElement('button');
+    b.textContent = '삭제';
+
+    b.onclick = async () => {
+      if(!confirm('댓글을 삭제할까요?')) return;
+
+      try {
+        await api('/admin/comments','DELETE',{id:c.id});
+        await comments();
+        status('댓글 삭제 완료');
+      } catch(e) {
+        status('댓글 삭제 실패: '+e.message);
+      }
+    };
+
+    div.append(t,b);
+    root.append(div);
+  }
+}
+</script>
+</body>
+</html>
