@@ -1,0 +1,12 @@
+웨딩 청첩장 수정판
+
+1. 기존 GitHub 저장소에 index.html, app.js, admin.html, config.js, music 폴더를 업로드합니다. 기존 photos 폴더와 gallery.json은 유지하세요.
+2. Cloudflare 무료 계정을 만들고 Workers & Pages > KV에서 네임스페이스를 하나 생성합니다.
+3. Workers & Pages에서 Worker를 만들고 worker/worker.js 코드를 배포합니다. Worker에 KV 바인딩 이름 WEDDING을 지정합니다.
+4. Worker 환경변수 GITHUB_REPO=qkrtk1231-dot/wedding-announcement, SITE_ORIGIN=https://qkrtk1231-dot.github.io 를 지정합니다.
+5. Worker Secrets로 ADMIN_PASSWORD(길고 임의의 관리자 비밀번호), GITHUB_TOKEN(해당 저장소 Contents 읽기/쓰기 권한만 가진 fine-grained token)을 설정합니다. 절대로 이 값을 GitHub 파일에 적지 마세요.
+6. config.js의 API_BASE를 실제 Worker 주소(예: https://wedding-announcement-api.계정.workers.dev)로 변경 후 GitHub에 업로드합니다.
+7. 하객용: https://qkrtk1231-dot.github.io/wedding-announcement/
+   관리자용: https://qkrtk1231-dot.github.io/wedding-announcement/admin.html
+
+주의: Cloudflare KV 무료 사용량 제한이 있습니다. GitHub API에도 제한이 있습니다. 비밀번호만으로 로그인하므로 공유하지 말고 길고 고유하게 설정하세요. 본 예시는 간단한 소규모 행사 용도로, 대량 트래픽이나 공격 방어를 보장하지 않습니다. 댓글은 60초 간격 제한을 두었지만 스팸 차단은 완벽하지 않습니다. 사진은 5MB 이하로 업로드하세요. GitHub Pages 반영에는 약간의 시간이 걸릴 수 있습니다. 무료 사용량 정책은 서비스 제공업체에 따라 바뀔 수 있습니다.

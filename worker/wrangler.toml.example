@@ -1,0 +1,11 @@
+name = "wedding-announcement-api"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+GITHUB_REPO = "qkrtk1231-dot/wedding-announcement"
+SITE_ORIGIN = "https://qkrtk1231-dot.github.io"
+
+[[kv_namespaces]]
+binding = "WEDDING"
+id = "YOUR_KV_NAMESPACE_ID"
